@@ -1,7 +1,0 @@
-streamlit
-pandas
-openpyxl
-requests
-tqdm
-
-
