@@ -13,7 +13,7 @@ import requests
 import tempfile
 
 # ========================================
-# Box API クラス (元のロジックを維持)
+# Box API クラス (変更なし)
 # ========================================
 BOX_API_BASE = 'https://api.box.com/2.0'
 BOX_UPLOAD_URL = 'https://upload.box.com/api/2.0/files/content'
@@ -122,7 +122,7 @@ class BoxUploader:
             return False
 
 # ========================================
-# Excel処理関数
+# Excel処理関数 (変更なし)
 # ========================================
 def copy_sheet_style(source_sheet, target_sheet):
     for col_char, dimension in source_sheet.column_dimensions.items():
@@ -143,6 +143,9 @@ def copy_sheet_style(source_sheet, target_sheet):
     for merged_range in source_sheet.merged_cells.ranges:
         target_sheet.merge_cells(str(merged_range))
 
+# ========================================
+# メイン処理関数 (修正箇所あり)
+# ========================================
 def process_and_upload(input_path, def_path, token, parent_id, suffix, temp_dir):
     
     # 定義ファイルの読み込み準備
@@ -155,6 +158,7 @@ def process_and_upload(input_path, def_path, token, parent_id, suffix, temp_dir)
 
     # データ読み込み
     try:
+        # header=1 なので、Excelの2行目がヘッダーとして扱われます
         df_original = pd.read_excel(input_path, header=1)
     except Exception as e:
         st.error(f"エクセル読み込みエラー: {e}")
@@ -163,8 +167,11 @@ def process_and_upload(input_path, def_path, token, parent_id, suffix, temp_dir)
     # フィルタリング
     df_filtered = df_original.copy()
     exclude_mask = pd.Series(False, index=df_filtered.index)
+    
+    # 「出現回数」で行をフィルタリング（ここは維持します）
     if '出現回数' in df_filtered.columns:
         exclude_mask |= (df_filtered['出現回数'] == 1)
+        
     if '案件名' in df_filtered.columns:
         exclude_mask |= (df_filtered['案件名'].astype(str).str.contains('SALE情報', na=False))
     
@@ -189,6 +196,9 @@ def process_and_upload(input_path, def_path, token, parent_id, suffix, temp_dir)
     success_count = 0
     failure_count = 0
     
+    # 削除したい列名のリスト
+    columns_to_remove = ['インフルエンサー名', '出現回数']
+
     # 処理ループ
     for i, ((shop_url, project_id), group_df) in enumerate(grouped):
         safe_shop_url = str(shop_url).replace('/', '').replace('\\', '')
@@ -208,9 +218,28 @@ def process_and_upload(input_path, def_path, token, parent_id, suffix, temp_dir)
         valid_rows = set(group_df.index + 3)
         last_data_row = 2 + len(df_original)
         
+        # 不要な行を削除
         for r in range(last_data_row, 2, -1):
             if r not in valid_rows:
                 ws.delete_rows(r)
+        
+        # ----------------------------------------------------
+        # 【追加】不要な列（インフルエンサー名、出現回数）を削除
+        # ----------------------------------------------------
+        # header=1 で読み込んでいるため、Excelのヘッダー行は2行目と想定
+        header_row_idx = 2
+        cols_to_delete = []
+
+        # ヘッダー行を走査して削除対象の列番号を取得
+        for col in range(1, ws.max_column + 1):
+            cell_value = ws.cell(row=header_row_idx, column=col).value
+            if cell_value in columns_to_remove:
+                cols_to_delete.append(col)
+        
+        # 列番号がずれないように、大きい数字（後ろの列）から順に削除する
+        for col_idx in sorted(cols_to_delete, reverse=True):
+            ws.delete_cols(col_idx)
+        # ----------------------------------------------------
         
         # 定義シート追加
         if wb_def_source and "データ定義" in wb_def_source.sheetnames:
@@ -246,7 +275,7 @@ def process_and_upload(input_path, def_path, token, parent_id, suffix, temp_dir)
         st.error(f"❌ 失敗: {failure_count} ファイル")
 
 # ========================================
-# Streamlit UI メイン
+# Streamlit UI メイン (変更なし)
 # ========================================
 def main():
     st.set_page_config(page_title="Box Uploader", layout="wide")
